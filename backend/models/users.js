@@ -25,6 +25,11 @@ const listUsers = async db => {
   return rows;
 };
 
+const findUserById = async (db, id) => {
+  const { rows } = await db.query(`SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = $1`, [id]);
+  return rows[0] ?? null;
+};
+
 // Case-insensitive: 'ALICE' finds the user registered as 'Alice'
 const findUserByUsername = async (db, username) => {
   const { rows } = await db.query(
@@ -67,6 +72,7 @@ module.exports = {
   PASSWORD_MAX_LENGTH,
   UsernameTakenError,
   listUsers,
+  findUserById,
   findUserByUsername,
   findCredentialsByUsername,
   createUser,
