@@ -4,12 +4,16 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pool, connect } = require('../db/db');
 
-// Run queries.sql in a single transaction so a failure leaves the database untouched
+/**
+ * Seeds the database with initial user data from `users.sql` within a transaction.
+ * @returns {Promise<void>} Resolves when the database has been seeded successfully.
+ * @throws {Error} If reading the SQL file or executing the queries fails.
+ */
 const seed = async () => {
   await connect();
-  const sql = await fs.readFile(path.join(__dirname, 'queries.sql'), 'utf8');
+  const sql = await fs.readFile(path.join(__dirname, 'users.sql'), 'utf8');
 
-  const client = await pool.connect();
+  const client = await pool.connect() ;
   try {
     await client.query('BEGIN');
     await client.query(sql);

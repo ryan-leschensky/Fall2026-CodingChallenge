@@ -34,7 +34,7 @@ describeDb('User accounts', () => {
   const password = 'correct horse battery';
 
   beforeAll(async () => {
-    await pool.query(fs.readFileSync(path.join(__dirname, '../seed/queries.sql'), 'utf8'));
+    await pool.query(fs.readFileSync(path.join(__dirname, '../seed/users.sql'), 'utf8'));
   });
 
   afterAll(async () => {

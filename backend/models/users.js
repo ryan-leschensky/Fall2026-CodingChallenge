@@ -2,7 +2,7 @@
 // argument so routes and tests can pass whichever connection they have.
 
 // Letters, digits, '.', '_' and '-', 3 to 30 characters. Mirrors the users_username_format
-// CHECK constraint in seed/queries.sql.
+// CHECK constraint in seed/users.sql.
 const USERNAME_PATTERN = /^[A-Za-z0-9_.-]{3,30}$/;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;

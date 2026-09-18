@@ -35,7 +35,7 @@ describeDb('Login', () => {
   const password = 'correct horse battery';
 
   beforeAll(async () => {
-    await pool.query(fs.readFileSync(path.join(__dirname, '../seed/queries.sql'), 'utf8'));
+    await pool.query(fs.readFileSync(path.join(__dirname, '../seed/users.sql'), 'utf8'));
     await request(app).post('/api/users').send({ username, password }).expect(201);
   });
 
