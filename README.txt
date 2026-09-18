@@ -14,7 +14,9 @@ PROJECT LAYOUT
                 index.js        builds the app, listens when run directly
                 db/db.js        PostgreSQL connection pool
                 routers/        API routes, mounted under /api
-                seed/           queries.sql (schema + sample data) and its runner
+                models/         SQL queries for each resource (users.js)
+                lib/            shared helpers (password hashing, HttpError)
+                seed/           queries.sql (database schema) and its runner
                 test/           Jest + Supertest API tests
   frontend/   React + TypeScript app built with Vite - runs on http://localhost:5173
 
@@ -42,13 +44,14 @@ Copy the template and fill in your values (DATABASE_URL is required):
   cd backend
   cp .env.example .env
 
-Then create the database tables and sample data:
+Then create the database tables:
 
   cd backend
   npm run seed
 
 This runs backend/seed/queries.sql in one transaction and is safe to rerun:
-tables are only created if missing and sample rows only go into empty tables.
+tables and indexes are only created if missing. (It also replaces the starter
+template's sample users(name, lastname) table if an old database still has it.)
 
 
 RUNNING THE APP
@@ -83,12 +86,32 @@ OTHER USEFUL COMMANDS
 
 API ENDPOINTS
 -------------
-TODO - document each endpoint (method, path, request body, response) as it is
-built, e.g.:
+Request and response bodies are JSON. Errors look like { "message": "..." }.
 
-  GET    /api/collections            List all collections
-  POST   /api/collections            Create a collection
-  ...
+A user is returned as:
+  { "id": 1, "username": "Alice", "createdAt": "2026-09-18T15:04:05.000Z" }
+The password hash is never included in a response.
+
+Usernames are 3-30 characters (letters, digits, ".", "_", "-") and are unique
+regardless of case: once "Alice" exists, "alice" and "ALICE" are taken too.
+The casing chosen at sign-up is kept for display, and lookups ignore case.
+Passwords are 8-128 characters and are stored only as a salted scrypt hash.
+
+  POST   /api/users              Sign up
+           body: { "username": "Alice", "password": "..." }
+           201 user (Location: /api/users/Alice)
+           400 invalid username/password, 409 username already taken
+
+  GET    /api/users              List all users
+           200 [user, ...]
+
+  GET    /api/users/:username    Get one user (case-insensitive)
+           200 user, 404 not found
+
+  POST   /api/auth/login         Check a username and password
+           body: { "username": "alice", "password": "..." }
+           200 user, 400 missing fields,
+           401 wrong username or password (same response for both)
 
 
 REFLECTION (under 100 words)

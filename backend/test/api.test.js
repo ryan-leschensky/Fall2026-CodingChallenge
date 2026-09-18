@@ -18,15 +18,32 @@ describe('API without a database', () => {
     const response = await request(app)
       .post('/api/users')
       .set('Content-Type', 'application/json')
-      .send('{"name":');
+      .send('{"username":');
 
     expect(response.statusCode).toBe(400);
   });
 
-  test.each([{}, { name: 'Name' }, { name: ' ', lastname: 'Lastname' }, { name: 1, lastname: 2 }])(
-    'Should reject invalid user %j',
+  test.each([
+    {},
+    { username: 'alice' },
+    { password: 'password123' },
+    { username: 'al', password: 'password123' },
+    { username: 'a'.repeat(31), password: 'password123' },
+    { username: 'has space', password: 'password123' },
+    { username: 'alice', password: 'short' },
+    { username: 'alice', password: 'p'.repeat(129) },
+    { username: 1, password: 12345678 },
+  ])('Should reject invalid sign-up %j', async data => {
+    const response = await request(app).post('/api/users').send(data);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.message).toEqual(expect.any(String));
+  });
+
+  test.each([{}, { username: 'alice' }, { username: 'alice', password: 1 }])(
+    'Should reject incomplete login %j',
     async data => {
-      const response = await request(app).post('/api/users').send(data);
+      const response = await request(app).post('/api/auth/login').send(data);
 
       expect(response.statusCode).toBe(400);
     },
@@ -36,33 +53,96 @@ describe('API without a database', () => {
 // These hit the PostgreSQL database in DATABASE_URL and are skipped when it is not set
 const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 
-describeDb('Testing Route /api/users', () => {
-  const createdIds = [];
+describeDb('User accounts', () => {
+  // Unique per run so reruns and leftover rows cannot collide
+  const username = `Alice_${Date.now().toString(36)}`;
+  const password = 'correct horse battery';
 
   beforeAll(async () => {
     await pool.query(fs.readFileSync(path.join(__dirname, '../seed/queries.sql'), 'utf8'));
   });
 
   afterAll(async () => {
-    await pool.query('DELETE FROM users WHERE id = ANY($1)', [createdIds]);
+    await pool.query('DELETE FROM users WHERE LOWER(username) = LOWER($1)', [username]);
   });
 
-  test('Should add new user', async () => {
-    const response = await request(app)
-      .post('/api/users')
-      .send({ name: 'Name', lastname: 'Lastname' });
+  test('Should sign up a new user', async () => {
+    const response = await request(app).post('/api/users').send({ username, password });
 
     expect(response.statusCode).toBe(201);
-    expect(response.body).toEqual({ id: expect.any(Number), name: 'Name', lastname: 'Lastname' });
-    createdIds.push(response.body.id);
+    expect(response.headers.location).toBe(`/api/users/${username}`);
+    expect(response.body).toEqual({
+      id: expect.any(Number),
+      username,
+      createdAt: expect.any(String),
+    });
+    expect(Date.parse(response.body.createdAt)).not.toBeNaN();
   });
 
-  test('Should get all users', async () => {
-    const result = await pool.query('SELECT id, name, lastname FROM users ORDER BY id');
+  test('Should store a hash, not the password', async () => {
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE username = $1', [
+      username,
+    ]);
 
+    expect(rows[0].password_hash).toMatch(/^scrypt\$/);
+    expect(rows[0].password_hash).not.toContain(password);
+  });
+
+  test.each([username, username.toLowerCase(), username.toUpperCase()])(
+    'Should reject %s as already taken',
+    async taken => {
+      const response = await request(app)
+        .post('/api/users')
+        .send({ username: taken, password: 'another password' });
+
+      expect(response.statusCode).toBe(409);
+    },
+  );
+
+  test('Should find the user regardless of case', async () => {
+    const response = await request(app).get(`/api/users/${username.toUpperCase()}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.username).toBe(username);
+    expect(response.body).not.toHaveProperty('passwordHash');
+  });
+
+  test('Unknown user returns 404', async () => {
+    const response = await request(app).get('/api/users/nobody-by-this-name');
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  test('Should list users without password hashes', async () => {
     const response = await request(app).get('/api/users');
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual(result.rows);
+    expect(response.body).toContainEqual(expect.objectContaining({ username }));
+    for (const user of response.body) {
+      expect(Object.keys(user).sort()).toEqual(['createdAt', 'id', 'username']);
+    }
+  });
+
+  test('Should log in with any username casing and the right password', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ username: username.toLowerCase(), password });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      id: expect.any(Number),
+      username,
+      createdAt: expect.any(String),
+    });
+  });
+
+  test.each([
+    ['wrong password', () => ({ username, password: 'wrong password' })],
+    ['unknown user', () => ({ username: 'nobody-by-this-name', password })],
+  ])('Login with %s returns the same 401', async (_, body) => {
+    const response = await request(app).post('/api/auth/login').send(body());
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body).toEqual({ message: 'Invalid username or password' });
   });
 });
