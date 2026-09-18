@@ -4,15 +4,26 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pool, connect } = require('../db/db');
 
-// Run queries.sql in a single transaction so a failure leaves the database untouched
+// Run in this order: a table's file must come after the tables its foreign keys reference
+const SQL_FILES = ['users.sql', 'refresh-tokens.sql'];
+
+/**
+ * Creates the database schema by running each file in `SQL_FILES` in order within one transaction.
+ * @returns {Promise<void>} Resolves when the database has been seeded successfully.
+ * @throws {Error} If reading a SQL file or executing its queries fails.
+ */
 const seed = async () => {
   await connect();
-  const sql = await fs.readFile(path.join(__dirname, 'queries.sql'), 'utf8');
+  const scripts = await Promise.all(
+    SQL_FILES.map(file => fs.readFile(path.join(__dirname, file), 'utf8')),
+  );
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(sql);
+    for (const sql of scripts) {
+      await client.query(sql);
+    }
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

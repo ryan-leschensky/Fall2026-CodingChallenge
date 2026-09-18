@@ -3,10 +3,12 @@ require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 // Import PostgreSQL Middleware
 const { pool, connect, PostgreSQL } = require('./db/db');
 const routes = require('./routers/routes');
+const { assertConfigured } = require('./lib/tokens');
 
 const app = express();
 
@@ -15,11 +17,19 @@ if (app.get('env') !== 'test') {
   app.use(morgan(app.get('env') === 'development' ? 'dev' : 'combined'));
 }
 
-// Access Control
-app.use(cors());
+// Access Control: the refresh token cookie is credentialed, so allowed origins must be listed
+// explicitly (a credentialed request cannot use "*")
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // Body parser
 app.use(express.json());
+
+// Cookie parser (for the refresh token cookie)
+app.use(cookieParser());
 
 // Middleware to make the PostgreSQL pool accessible in request handlers
 app.use(PostgreSQL);
@@ -45,7 +55,9 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   const port = process.env.PORT || 3000;
 
-  connect()
+  Promise.resolve()
+    .then(assertConfigured)
+    .then(connect)
     .then(() => {
       const server = app.listen(port, () => {
         console.log(`Server is running on port ${port}`);
@@ -56,7 +68,7 @@ if (require.main === module) {
       process.once('SIGTERM', shutdown);
     })
     .catch(err => {
-      console.error('Could not connect to PostgreSQL:', err.message);
+      console.error('Could not start the server:', err.message);
       process.exitCode = 1;
       return pool.end();
     });
