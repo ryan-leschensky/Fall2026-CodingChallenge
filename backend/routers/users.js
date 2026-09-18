@@ -5,7 +5,16 @@ const Users = require('../models/users');
 
 const router = express.Router();
 
-// Returns an error message for invalid sign-up input, or null when it is valid
+/**
+ * Ensures that the given username and password are valid for registering a new account. This
+ * should be called whenever a new account is being created.
+ * @param param0            Passed json object containing a username and password field
+ * @param param0.username   String username that the user wants to use for their account (must be
+ *                          unique)
+ * @param param0.password   Plaintext password that the user wants to use for their account
+ * @returns {null|string}   An error message if there is an issue with the username or
+ *                          password.
+ */
 const validateSignUp = ({ username, password }) => {
   if (typeof username !== 'string' || !Users.USERNAME_PATTERN.test(username)) {
     return 'username must be 3-30 characters: letters, digits, ".", "_" or "-"';
@@ -20,12 +29,16 @@ const validateSignUp = ({ username, password }) => {
   return null;
 };
 
-// List all users
+/**
+ * Endpoint to get a list of every user
+ */
 router.get('/', async (req, res) => {
   res.json(await Users.listUsers(req.pool));
 });
 
-// Look up one user; the username match ignores case
+/**
+ * Endpoint to get a user by their username (unique)
+ */
 router.get('/:username', async (req, res) => {
   const user = await Users.findUserByUsername(req.pool, req.params.username);
   if (!user) {
@@ -34,7 +47,9 @@ router.get('/:username', async (req, res) => {
   res.json(user);
 });
 
-// Create an account (sign up)
+/**
+ * Endpoint to create a new user account (sign up)
+ */
 router.post('/', async (req, res) => {
   const { username, password } = req.body ?? {};
 

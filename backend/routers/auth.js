@@ -8,8 +8,9 @@ const router = express.Router();
 // Anything longer cannot be a valid password, so skip hashing it
 const MAX_PASSWORD_INPUT = 1024;
 
-// Check a username and password. The same 401 is returned for an unknown user and a wrong
-// password so the response does not reveal which usernames exist.
+/**
+ * Endpoint to authenticate a user (login).
+ */
 router.post('/login', async (req, res) => {
   const { username, password } = req.body ?? {};
 
