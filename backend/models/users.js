@@ -1,18 +1,19 @@
-// Database access for user accounts. Every function takes the pg pool (req.pool) as its first
-// argument so routes and tests can pass whichever connection they have.
+/**
+ * Database access for user accounts. Every function takes the pg pool (req.pool) as its first
+ *  argument, so routes and tests can pass whichever connection they have.
+ */
 
-// Letters, digits, '.', '_' and '-', 3 to 30 characters. Mirrors the users_username_format
-// CHECK constraint in seed/users.sql.
 const USERNAME_PATTERN = /^[A-Za-z0-9_.-]{3,30}$/;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
-// Postgres error code for a unique constraint violation
 const UNIQUE_VIOLATION = '23505';
 
-// Columns that are safe to send to clients (never the password hash)
 const PUBLIC_COLUMNS = 'id, username, created_at AS "createdAt"';
 
+/**
+ * Error thrown when a username is already taken.
+ */
 class UsernameTakenError extends Error {
   constructor(username) {
     super(`Username "${username}" is already taken`);
@@ -20,17 +21,33 @@ class UsernameTakenError extends Error {
   }
 }
 
+/**
+ * List all users
+ * @param db              Database connection
+ * @returns {Promise<*>}  All users
+ */
 const listUsers = async db => {
   const { rows } = await db.query(`SELECT ${PUBLIC_COLUMNS} FROM users ORDER BY id`);
   return rows;
 };
 
+/**
+ * Finds a user by their numeric database ID.
+ * @param db                    Database connection
+ * @param {number} id           User ID (integer primary key)
+ * @returns {Promise<*|null>}   Returns the user, or null if not found
+ */
 const findUserById = async (db, id) => {
   const { rows } = await db.query(`SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = $1`, [id]);
   return rows[0] ?? null;
 };
 
-// Case-insensitive: 'ALICE' finds the user registered as 'Alice'
+/**
+ * Finds a user by their unique username.
+ * @param db                    Database connection
+ * @param {string} username     Username
+ * @returns {Promise<*|null>}   Returns the user, or null if not found
+ */
 const findUserByUsername = async (db, username) => {
   const { rows } = await db.query(
     `SELECT ${PUBLIC_COLUMNS} FROM users WHERE LOWER(username) = LOWER($1)`,
@@ -39,7 +56,12 @@ const findUserByUsername = async (db, username) => {
   return rows[0] ?? null;
 };
 
-// Includes the password hash; only for checking credentials, never for responses
+/**
+ * Finds a user's credentials by their unique username.
+ * @param db                    Database connection
+ * @param {string} username     Username
+ * @returns {Promise<*|null>}   Returns the user, or null if not found
+ */
 const findCredentialsByUsername = async (db, username) => {
   const { rows } = await db.query(
     `SELECT ${PUBLIC_COLUMNS}, password_hash AS "passwordHash"
@@ -49,8 +71,14 @@ const findCredentialsByUsername = async (db, username) => {
   return rows[0] ?? null;
 };
 
-// Relies on the unique index rather than checking first, so two simultaneous sign-ups for
-// 'Alice' and 'alice' cannot both succeed
+/**
+ * Registers a user given an object containing their username and password hash.
+ * @param db                            Database connection
+ * @param {object} param1               User data
+ * @param {string} param1.username      Username
+ * @param {string} param1.passwordHash  Password hash
+ * @returns {Promise<*>}                Returns the newly created user if successful
+ */
 const createUser = async (db, { username, passwordHash }) => {
   try {
     const { rows } = await db.query(

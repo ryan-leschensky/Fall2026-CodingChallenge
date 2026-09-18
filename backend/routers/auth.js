@@ -13,9 +13,6 @@ const MAX_PASSWORD_INPUT = 1024;
 
 const REFRESH_COOKIE = 'refresh_token';
 
-// httpOnly keeps the refresh token away from page scripts (and XSS). The path limits the cookie
-// to this router, so it is sent to /refresh and /logout and nowhere else. SameSite=Strict stops
-// other sites from making the browser send it.
 const refreshCookieOptions = req => ({
   httpOnly: true,
   secure: req.app.get('env') === 'production',

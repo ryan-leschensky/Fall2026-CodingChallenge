@@ -3,8 +3,6 @@ const { promisify } = require('node:util');
 
 const scrypt = promisify(crypto.scrypt);
 
-// scrypt cost parameters: 32 MiB of memory and roughly 100ms per hash. They are stored with every
-// hash, so they can be raised later without breaking existing passwords.
 const COST = { N: 2 ** 15, r: 8, p: 1 };
 const KEY_LENGTH = 64;
 const SALT_LENGTH = 16;
@@ -26,7 +24,7 @@ const hashPassword = async password => {
 
 /**
  * Check a plaintext password against a stored hash in constant time.
- * Returns false (never throws) for a malformed stored hash.
+ * @returns false (never throws) for a malformed stored hash.
  */
 const verifyPassword = async (password, stored) => {
   const [algorithm, N, r, p, salt, hash] = String(stored).split('$');
@@ -47,9 +45,6 @@ const verifyPassword = async (password, stored) => {
   return crypto.timingSafeEqual(actual, expected);
 };
 
-// A real hash of a random password, checked when a login names an unknown user so that request
-// takes as long as one for a real user (otherwise response time reveals which usernames exist).
-// Computed on first use rather than at startup.
 let dummyHash;
 const getDummyHash = () => (dummyHash ??= hashPassword(crypto.randomBytes(32).toString('hex')));
 

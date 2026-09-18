@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 
 /**
  * Start a new session for a user.
- * @returns {Promise<{ expiresAt: Date }>} When the new token expires
+ * @returns {Promise<{ expiresAt: Date }>}  When the new token expires
  */
 const createRefreshToken = async (db, { userId, tokenHash, idleSeconds, maxSeconds }) => {
   const { rows } = await db.query(
@@ -52,7 +52,7 @@ const rotateRefreshToken = async (db, { tokenHash, nextTokenHash, idleSeconds })
  * End the session a token belongs to by revoking every live token in its family. Used for
  * logout, and when an already-used token is presented again (it was copied, so the session can
  * no longer be trusted). Does nothing for an unknown token.
- * @returns {Promise<number>} How many live tokens were revoked
+ * @returns {Promise<number>}   How many live tokens were revoked
  */
 const revokeFamily = async (db, tokenHash) => {
   const { rowCount } = await db.query(
@@ -64,7 +64,12 @@ const revokeFamily = async (db, tokenHash) => {
   return rowCount;
 };
 
-// Removes all expired refresh tokens to avoid clutter
+/**
+ * Deletes all refresh tokens that are expired for a user
+ * @param db                    Database connection
+ * @param {number} userId       User ID
+ * @returns {Promise<void>}     Returns nothing if successful
+ */
 const deleteExpiredRefreshTokens = async (db, userId) => {
   await db.query('DELETE FROM refresh_tokens WHERE user_id = $1 AND expires_at <= now()', [userId]);
 };
