@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const path = require('path');
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
@@ -16,6 +17,47 @@ const app = express();
 if (app.get('env') !== 'test') {
   app.use(morgan(app.get('env') === 'development' ? 'dev' : 'combined'));
 }
+
+// SwaggerUI Config/Middleware
+
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'Coding Challenge API',
+            version: '1.0.0',
+            description: 'API documentation for the backend service',
+        },
+        servers: [
+            {
+                url: 'http://localhost:3000',
+                description: 'Development server',
+            },
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                },
+            },
+        },
+    },
+    // glob only accepts "/" as a separator, so convert Windows paths before joining
+    apis: [path.posix.join(__dirname.split(path.sep).join('/'), 'routers', '*.js')], // Path to the API docs / route files
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+// Serve the raw OpenAPI spec (for IDEs and other tooling)
+app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+
+// Serve Swagger UI at /api-docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Access Control: the refresh token cookie is credentialed, so allowed origins must be listed
 // explicitly (a credentialed request cannot use "*")

@@ -30,14 +30,59 @@ const validateSignUp = ({ username, password }) => {
 };
 
 /**
- * Endpoint to get a list of every user
+ * @openapi
+ * /api/users:
+ *   get:
+ *     summary: Retrieve all users
+ *     tags:
+ *       - Users
+ *     responses:
+ *       200:
+ *         description: List of users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   username:
+ *                     type: string
  */
 router.get('/', async (req, res) => {
   res.json(await Users.listUsers(req.pool));
 });
 
 /**
- * Endpoint to get a user by their username (unique)
+ * @openapi
+ * /api/users/{username}:
+ *   get:
+ *     summary: Get a user by username
+ *     tags:
+ *       - Users
+ *     parameters:
+ *       - in: path
+ *         name: username
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Username of the user to retrieve
+ *     responses:
+ *       200:
+ *         description: User details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 username:
+ *                   type: string
+ *       404:
+ *         description: User not found
  */
 router.get('/:username', async (req, res) => {
   const user = await Users.findUserByUsername(req.pool, req.params.username);
@@ -48,7 +93,42 @@ router.get('/:username', async (req, res) => {
 });
 
 /**
- * Endpoint to create a new user account (sign up)
+ * @openapi
+ * /api/users:
+ *   post:
+ *     summary: Create a new user account (sign up)
+ *     tags:
+ *       - Users
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User successfully created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 username:
+ *                   type: string
+ *       400:
+ *         description: Validation error
+ *       409:
+ *         description: Username already taken
  */
 router.post('/', async (req, res) => {
   const { username, password } = req.body ?? {};

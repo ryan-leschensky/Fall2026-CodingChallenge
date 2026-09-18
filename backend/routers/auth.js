@@ -43,8 +43,57 @@ const clearRefreshCookie = (req, res) => {
 };
 
 /**
- * Endpoint to authenticate a user (login). Starts a session: responds with an access token and
- * sets the refresh token cookie.
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     summary: Authenticate user and start a session
+ *     tags:
+ *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful, returns user info and access token
+ *         headers:
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *             description: HttpOnly refresh token cookie
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     username:
+ *                       type: string
+ *                 accessToken:
+ *                   type: string
+ *                 tokenType:
+ *                   type: string
+ *                   example: Bearer
+ *                 expiresIn:
+ *                   type: integer
+ *       400:
+ *         description: Missing username or password
+ *       401:
+ *         description: Invalid username or password
  */
 router.post('/login', async (req, res) => {
   const { username, password } = req.body ?? {};
@@ -83,8 +132,17 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * Endpoint to get a new access token using the refresh token cookie. The refresh token is
- * rotated: the cookie is replaced and the old token stops working.
+ * @openapi
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token using refresh cookie
+ *     tags:
+ *       - Auth
+ *     responses:
+ *       200:
+ *         description: Session rotated, returns user info and new access token
+ *       401:
+ *         description: Session expired or invalid refresh token
  */
 router.post('/refresh', async (req, res) => {
   const presented = req.cookies?.[REFRESH_COOKIE];
@@ -115,9 +173,15 @@ router.post('/refresh', async (req, res) => {
 });
 
 /**
- * Endpoint to end the current session (logout). Revokes the refresh token and clears its cookie.
- * Always succeeds, even without a session. The client should also discard its access token,
- * which stays valid until it expires.
+ * @openapi
+ * /api/auth/logout:
+ *   post:
+ *     summary: End current session and revoke refresh token
+ *     tags:
+ *       - Auth
+ *     responses:
+ *       204:
+ *         description: Successfully logged out
  */
 router.post('/logout', async (req, res) => {
   const presented = req.cookies?.[REFRESH_COOKIE];
@@ -129,7 +193,28 @@ router.post('/logout', async (req, res) => {
 });
 
 /**
- * Endpoint to get the currently logged-in user.
+ * @openapi
+ * /api/auth/me:
+ *   get:
+ *     summary: Get currently authenticated user
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Currently logged-in user profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 username:
+ *                   type: string
+ *       401:
+ *         description: Missing, invalid, or expired authorization token
  */
 router.get('/me', requireAuth, async (req, res) => {
   const user = await Users.findUserById(req.pool, req.user.id);

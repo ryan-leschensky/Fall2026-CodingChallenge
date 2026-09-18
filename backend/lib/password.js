@@ -7,7 +7,7 @@ const COST = { N: 2 ** 15, r: 8, p: 1 };
 const KEY_LENGTH = 64;
 const SALT_LENGTH = 16;
 
-// scrypt needs 128 * N * r bytes of memory; Node's default cap is exactly 32 MiB, so leave headroom
+// scrypt needs 128 * N * r bytes of memory
 const maxmem = params => 256 * params.N * params.r;
 
 /**
