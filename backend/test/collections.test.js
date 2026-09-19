@@ -534,6 +534,87 @@ describeDb('Collections', () => {
     });
   });
 
+  describe('Pagination', () => {
+    let collection;
+    const imagesUrl = query => `/api/collections/${collection.id}/images${query}`;
+
+    beforeAll(async () => {
+      collection = await createCollection('Paged');
+      for (let n = 1; n <= 25; n++) {
+        await api('owner', 'post', imagesUrl('')).send({
+          imageUrl: `https://images.example/paged-${n}.jpg`,
+        });
+      }
+    });
+
+    test('Should return the first 20 images by default, with the total in a header', async () => {
+      const response = await api('owner', 'get', imagesUrl(''));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toHaveLength(20);
+      expect(response.body[0].imageUrl).toBe('https://images.example/paged-25.jpg');
+      expect(response.headers['x-total-count']).toBe('25');
+    });
+
+    test('Should return the next page without repeating images', async () => {
+      const first = await api('owner', 'get', imagesUrl('?limit=10&page=1'));
+      const second = await api('owner', 'get', imagesUrl('?limit=10&page=2'));
+      const last = await api('owner', 'get', imagesUrl('?limit=10&page=3'));
+
+      const ids = [...first.body, ...second.body, ...last.body].map(image => image.id);
+      expect(last.body).toHaveLength(5);
+      expect(new Set(ids).size).toBe(25);
+    });
+
+    test('Should limit the images embedded in the collection too', async () => {
+      const detail = await api('owner', 'get', `/api/collections/${collection.id}`);
+      const paged = await api('owner', 'get', `/api/collections/${collection.id}?limit=5`);
+
+      expect(detail.body.images).toHaveLength(20);
+      expect(detail.body.imageCount).toBe(25);
+      expect(paged.body.images).toHaveLength(5);
+    });
+
+    test('Should page the collection list and report its total', async () => {
+      const all = await api('owner', 'get', '/api/collections?limit=100');
+      const total = Number(all.headers['x-total-count']);
+      const firstTwo = await api('owner', 'get', '/api/collections?limit=2');
+      const nextTwo = await api('owner', 'get', '/api/collections?limit=2&offset=2');
+
+      expect(total).toBe(all.body.length);
+      expect(total).toBeGreaterThan(4);
+      expect(firstTwo.headers['x-total-count']).toBe(String(total));
+      expect([...firstTwo.body, ...nextTwo.body].map(c => c.id)).toEqual(
+        all.body.slice(0, 4).map(c => c.id),
+      );
+    });
+
+    test('Should let a browser on another origin read the total', async () => {
+      const response = await api('owner', 'get', imagesUrl('')).set(
+        'Origin',
+        'http://localhost:5173',
+      );
+
+      expect(response.headers['access-control-expose-headers']).toMatch(/X-Total-Count/);
+    });
+
+    test.each([
+      '/api/collections?offset=99999999999999999999',
+      '/api/collections?page=99999999999999999&limit=100',
+      '/api/collections?limit=101',
+    ])('Should reject %s with a 400, not a server error', async url => {
+      const response = await api('owner', 'get', url);
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test('Should reject an out-of-range page on the image list too', async () => {
+      const images = await api('owner', 'get', imagesUrl('?page=99999999999999999'));
+
+      expect(images.statusCode).toBe(400);
+    });
+  });
+
   describe('Leaving, removing and transferring', () => {
     let collection;
     const url = rest => `/api/collections/${collection.id}${rest}`;

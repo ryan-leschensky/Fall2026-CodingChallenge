@@ -1,6 +1,7 @@
 const express = require('express');
 const HttpError = require('../lib/http-error');
 const { parseId } = require('../lib/ids');
+const { readPagination } = require('../lib/pagination');
 const { Permission } = require('../lib/permissions');
 const requireCollectionPermission = require('../middleware/collection-access');
 const CollectionImages = require('../models/collection-images');
@@ -227,13 +228,32 @@ const imageIdOf = req => {
  * /api/collections/{collectionId}/images:
  *   get:
  *     summary: List a collection's images
- *     description: Needs view permission. Newest first.
+ *     description: Needs view permission. Newest first, one page at a time (20 by default). The total across all pages is in the X-Total-Count header.
  *     tags:
  *       - Images
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/CollectionId'
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum number of images to return (default 20, max 100)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number (1-based)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of images to skip
  *     responses:
  *       200:
  *         description: The images
@@ -243,11 +263,17 @@ const imageIdOf = req => {
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/CollectionImage'
+ *       400:
+ *         description: Invalid pagination parameter
  *       404:
  *         description: No such collection, or the user has no access to it
  */
 router.get('/', requireCollectionPermission(Permission.VIEW), async (req, res) => {
-  res.json(await CollectionImages.listImages(req.pool, req.collection.id));
+  const pagination = readPagination(req.query);
+  const images = await CollectionImages.listImages(req.pool, req.collection.id, pagination);
+  const total = await CollectionImages.countImages(req.pool, req.collection.id);
+  res.set('X-Total-Count', String(total));
+  res.json(images);
 });
 
 /**

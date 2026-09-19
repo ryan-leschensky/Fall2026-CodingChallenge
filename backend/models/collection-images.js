@@ -36,16 +36,39 @@ class DuplicateImageError extends Error {
  * Lists a collection's images, newest first.
  * @param db                        Database connection
  * @param {number} collectionId     Collection ID
+ * @param {{ limit?: number, offset?: number }} [options] Pagination options
  * @returns {Promise<object[]>}
  */
-const listImages = async (db, collectionId) => {
-  const { rows } = await db.query(
-    `SELECT ${IMAGE_COLUMNS} FROM collection_images
+const listImages = async (db, collectionId, options = {}) => {
+  const { limit, offset } = options;
+  let sql = `SELECT ${IMAGE_COLUMNS} FROM collection_images
      WHERE collection_id = $1
-     ORDER BY created_at DESC, id DESC`,
+     ORDER BY created_at DESC, id DESC`;
+  const params = [collectionId];
+  if (typeof limit === 'number' && limit > 0) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    if (typeof offset === 'number' && offset >= 0) {
+      params.push(offset);
+      sql += ` OFFSET $${params.length}`;
+    }
+  }
+  const { rows } = await db.query(sql, params);
+  return rows;
+};
+
+/**
+ * Counts the total number of images in a collection.
+ * @param db                        Database connection
+ * @param {number} collectionId     Collection ID
+ * @returns {Promise<number>}
+ */
+const countImages = async (db, collectionId) => {
+  const { rows } = await db.query(
+    'SELECT count(*)::integer AS total FROM collection_images WHERE collection_id = $1',
     [collectionId],
   );
-  return rows;
+  return rows[0].total;
 };
 
 /**
@@ -157,6 +180,7 @@ module.exports = {
   MAX_TAGS,
   DuplicateImageError,
   listImages,
+  countImages,
   findImage,
   addImage,
   updateImage,

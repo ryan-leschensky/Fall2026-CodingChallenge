@@ -1,5 +1,6 @@
 const express = require('express');
 const HttpError = require('../lib/http-error');
+const { readPagination } = require('../lib/pagination');
 const { decodeShareId } = require('../lib/share-ids');
 const optionalAuth = require('../middleware/optional-auth');
 const requireAuth = require('../middleware/require-auth');
@@ -45,7 +46,7 @@ const findSharedCollection = async req => {
  *     summary: View a collection through its share link
  *     description: >
  *       Works without logging in. With an access token, permission is the user's own access to
- *       the collection (null until they join).
+ *       the collection (null until they join). Images come one page at a time (20 by default); see limit, page and offset.
  *     tags:
  *       - Sharing
  *     security:
@@ -53,6 +54,25 @@ const findSharedCollection = async req => {
  *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/ShareId'
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum number of images to return
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number (1-based)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of images to skip
  *     responses:
  *       200:
  *         description: The collection and its images
@@ -60,6 +80,8 @@ const findSharedCollection = async req => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/CollectionWithImages'
+ *       400:
+ *         description: Invalid pagination parameter
  *       401:
  *         description: An access token was sent but is invalid or expired
  *       404:
@@ -67,7 +89,8 @@ const findSharedCollection = async req => {
  */
 router.get('/:shareId', optionalAuth, async (req, res) => {
   const collection = await findSharedCollection(req);
-  const images = await CollectionImages.listImages(req.pool, collection.id);
+  const pagination = readPagination(req.query);
+  const images = await CollectionImages.listImages(req.pool, collection.id, pagination);
 
   // The response depends on who is asking and can stop being public at any time
   res.set('Cache-Control', 'no-store');

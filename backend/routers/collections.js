@@ -1,5 +1,6 @@
 const express = require('express');
 const HttpError = require('../lib/http-error');
+const { readPagination } = require('../lib/pagination');
 const { Permission } = require('../lib/permissions');
 const requireAuth = require('../middleware/require-auth');
 const requireCollectionPermission = require('../middleware/collection-access');
@@ -131,25 +132,58 @@ router.use(requireAuth);
  * /api/collections:
  *   get:
  *     summary: List the collections the user owns or is a member of
- *     description: Most recently changed first.
+ *     description: >
+ *       Most recently changed first, one page at a time (20 by default). The total across all pages
+ *       is in the X-Total-Count header.
  *     tags:
  *       - Collections
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum number of collections to return (default 20, max 100)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number (1-based)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of collections to skip
  *     responses:
  *       200:
  *         description: The user's collections
+ *         headers:
+ *           X-Total-Count:
+ *             schema:
+ *               type: integer
+ *             description: Number of collections across all pages
  *         content:
  *           application/json:
  *             schema:
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Collection'
+ *       400:
+ *         description: Invalid pagination parameter
  *       401:
  *         description: Missing, invalid, or expired access token
  */
 router.get('/', async (req, res) => {
-  res.json(await Collections.listCollectionsForUser(req.pool, req.user.id));
+  const pagination = readPagination(req.query);
+  const collections = await Collections.listCollectionsForUser(req.pool, req.user.id, pagination);
+  const total = await Collections.countCollectionsForUser(req.pool, req.user.id);
+  res.set('X-Total-Count', String(total));
+  res.json(collections);
 });
 
 /**
@@ -202,13 +236,32 @@ router.post('/', async (req, res) => {
  * /api/collections/{collectionId}:
  *   get:
  *     summary: Get a collection and its images
- *     description: Needs view permission.
+ *     description: Needs view permission. Images come one page at a time (20 by default); see limit, page and offset.
  *     tags:
  *       - Collections
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/CollectionId'
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum number of images to return
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number (1-based)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of images to skip
  *     responses:
  *       200:
  *         description: The collection, with its images newest first
@@ -216,13 +269,16 @@ router.post('/', async (req, res) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/CollectionWithImages'
+ *       400:
+ *         description: Invalid pagination parameter
  *       401:
  *         description: Missing, invalid, or expired access token
  *       404:
  *         description: No such collection, or the user has no access to it
  */
 router.get('/:collectionId', requireCollectionPermission(Permission.VIEW), async (req, res) => {
-  const images = await CollectionImages.listImages(req.pool, req.collection.id);
+  const pagination = readPagination(req.query);
+  const images = await CollectionImages.listImages(req.pool, req.collection.id, pagination);
   res.json({ ...req.collection.toJSON(), images });
 });
 

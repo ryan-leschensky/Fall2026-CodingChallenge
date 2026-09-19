@@ -25,31 +25,31 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 
 const swaggerOptions = {
-    definition: {
-        openapi: '3.0.0',
-        info: {
-            title: 'Coding Challenge API',
-            version: '1.0.0',
-            description: 'API documentation for the backend service',
-        },
-        servers: [
-            {
-                url: 'http://localhost:3000',
-                description: 'Development server',
-            },
-        ],
-        components: {
-            securitySchemes: {
-                bearerAuth: {
-                    type: 'http',
-                    scheme: 'bearer',
-                    bearerFormat: 'JWT',
-                },
-            },
-        },
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Coding Challenge API',
+      version: '1.0.0',
+      description: 'API documentation for the backend service',
     },
-    // glob only accepts "/" as a separator, so convert Windows paths before joining
-    apis: [path.posix.join(__dirname.split(path.sep).join('/'), 'routers', '*.js')], // Path to the API docs / route files
+    servers: [
+      {
+        url: 'http://localhost:3000',
+        description: 'Development server',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  // glob only accepts "/" as a separator, so convert Windows paths before joining
+  apis: [path.posix.join(__dirname.split(path.sep).join('/'), 'routers', '*.js')], // Path to the API docs / route files
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -66,7 +66,14 @@ const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Browsers hide response headers from cross-origin scripts unless they are listed here
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    exposedHeaders: ['X-Total-Count', 'Location'],
+  }),
+);
 
 // Body parser
 app.use(express.json());

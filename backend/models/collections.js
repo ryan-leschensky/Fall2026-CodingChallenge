@@ -79,16 +79,42 @@ const SELECT_COLLECTION = `
  * Lists the collections a user owns or is a member of, most recently changed first.
  * @param db                        Database connection
  * @param {number} userId           User ID
+ * @param {{ limit?: number, offset?: number }} [options] Pagination options
  * @returns {Promise<Collection[]>}
  */
-const listCollectionsForUser = async (db, userId) => {
-  const { rows } = await db.query(
-    `${SELECT_COLLECTION}
+const listCollectionsForUser = async (db, userId, options = {}) => {
+  const { limit, offset } = options;
+  let sql = `${SELECT_COLLECTION}
      WHERE c.owner_id = $1 OR m.user_id IS NOT NULL
-     ORDER BY c.updated_at DESC, c.id DESC`,
+     ORDER BY c.updated_at DESC, c.id DESC`;
+  const params = [userId];
+  if (typeof limit === 'number' && limit > 0) {
+    params.push(limit);
+    sql += ` LIMIT $${params.length}`;
+    if (typeof offset === 'number' && offset >= 0) {
+      params.push(offset);
+      sql += ` OFFSET $${params.length}`;
+    }
+  }
+  const { rows } = await db.query(sql, params);
+  return rows.map(row => new Collection(row));
+};
+
+/**
+ * Counts the collections a user owns or is a member of.
+ * @param db                        Database connection
+ * @param {number} userId           User ID
+ * @returns {Promise<number>}
+ */
+const countCollectionsForUser = async (db, userId) => {
+  const { rows } = await db.query(
+    `SELECT count(*)::integer AS total FROM collections c
+     WHERE c.owner_id = $1
+        OR EXISTS (SELECT 1 FROM collection_members m
+                   WHERE m.collection_id = c.id AND m.user_id = $1)`,
     [userId],
   );
-  return rows.map(row => new Collection(row));
+  return rows[0].total;
 };
 
 /**
@@ -200,6 +226,7 @@ module.exports = {
   DESCRIPTION_MAX_LENGTH,
   Collection,
   listCollectionsForUser,
+  countCollectionsForUser,
   findCollectionForUser,
   findCollectionByShare,
   createCollection,
