@@ -13,6 +13,7 @@ const routes = require('./routers/routes');
 const Tokens = require('./lib/tokens');
 const ShareIds = require('./lib/share-ids');
 const Storage = require('./storage');
+const Pixabay = require('./lib/pixabay');
 const { readMediaConfig } = require('./lib/media-config');
 
 const app = express();
@@ -144,6 +145,7 @@ if (require.main === module) {
     .then(Tokens.assertConfigured)
     .then(ShareIds.assertConfigured)
     .then(Storage.assertConfigured)
+    .then(Pixabay.assertConfigured)
     .then(connect)
     .then(() => {
       const server = app.listen(port, () => {

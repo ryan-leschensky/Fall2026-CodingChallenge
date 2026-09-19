@@ -172,6 +172,33 @@ const deleteImage = async (db, collectionId, imageId) => {
   return rows[0].deleted > 0;
 };
 
+/**
+ * Finds which of a user's collections (owned or shared with them) already hold images from a
+ * source, e.g. to mark search results that are already saved.
+ * @param db                        Database connection
+ * @param {number} userId           User ID
+ * @param {string} source           e.g. 'pixabay'
+ * @param {string[]} sourceIds      Ids of the images at that source
+ * @returns {Promise<Map<string, number[]>>}  Collection IDs by source id, for images saved anywhere
+ */
+const findSavedCollections = async (db, userId, source, sourceIds) => {
+  if (sourceIds.length === 0) {
+    return new Map();
+  }
+  const { rows } = await db.query(
+    `SELECT i.source_id AS "sourceId",
+            array_agg(DISTINCT i.collection_id ORDER BY i.collection_id) AS "collectionIds"
+     FROM collection_images i
+     JOIN collections c ON c.id = i.collection_id
+     LEFT JOIN collection_members m ON m.collection_id = c.id AND m.user_id = $1
+     WHERE i.source = $2 AND i.source_id = ANY($3::text[])
+       AND (c.owner_id = $1 OR m.user_id IS NOT NULL)
+     GROUP BY i.source_id`,
+    [userId, source, sourceIds],
+  );
+  return new Map(rows.map(row => [row.sourceId, row.collectionIds]));
+};
+
 module.exports = {
   URL_MAX_LENGTH,
   SOURCE_PATTERN,
@@ -187,4 +214,5 @@ module.exports = {
   addImage,
   updateImage,
   deleteImage,
+  findSavedCollections,
 };

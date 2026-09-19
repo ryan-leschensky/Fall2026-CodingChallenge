@@ -4,6 +4,8 @@
  */
 process.env.JWT_SECRET = 'test-secret-that-is-at-least-32-bytes-long';
 process.env.SHARE_LINK_SECRET = 'test-share-link-secret-at-least-32-bytes';
+// Never sent anywhere: tests replace fetch
+process.env.PIXABAY_API_KEY = 'test-pixabay-key';
 
 // Saved images go to a temporary folder, never the real media folder, and only the default
 // allowed host is downloaded from (tests replace fetch, so nothing is actually downloaded)
