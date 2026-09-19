@@ -3,6 +3,7 @@ const HttpError = require('../lib/http-error');
 const { readPagination } = require('../lib/pagination');
 const { decodeShareId } = require('../lib/share-ids');
 const optionalAuth = require('../middleware/optional-auth');
+const { sharedLimit } = require('../middleware/rate-limit');
 const requireAuth = require('../middleware/require-auth');
 const Collections = require('../models/collections');
 const CollectionImages = require('../models/collection-images');
@@ -10,6 +11,8 @@ const CollectionMembers = require('../models/collection-members');
 
 // Collections opened through their share link: /api/shared/:shareId
 const router = express.Router();
+
+router.use(sharedLimit);
 
 /**
  * Finds the collection a share link points to, as seen by the requesting user (if any).
@@ -86,6 +89,8 @@ const findSharedCollection = async req => {
  *         description: An access token was sent but is invalid or expired
  *       404:
  *         description: The link is invalid, was reset, or link sharing is off
+ *       429:
+ *         description: Too many requests from this address; see Retry-After
  */
 router.get('/:shareId', optionalAuth, async (req, res) => {
   const collection = await findSharedCollection(req);
@@ -122,6 +127,8 @@ router.get('/:shareId', optionalAuth, async (req, res) => {
  *         description: Missing, invalid, or expired access token
  *       404:
  *         description: The link is invalid, was reset, or link sharing is off
+ *       429:
+ *         description: Too many requests from this address; see Retry-After
  */
 router.post('/:shareId/join', requireAuth, async (req, res) => {
   const collection = await findSharedCollection(req);

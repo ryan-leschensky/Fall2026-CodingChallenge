@@ -5,6 +5,7 @@ const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 
 // Import PostgreSQL Middleware
 const { pool, connect, PostgreSQL } = require('./db/db');
@@ -13,6 +14,16 @@ const Tokens = require('./lib/tokens');
 const ShareIds = require('./lib/share-ids');
 
 const app = express();
+
+// Behind a reverse proxy or load balancer, trust its X-Forwarded-For header so req.ip (and so the
+// rate limits) see the real client address. TRUST_PROXY is the number of proxies in front.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  if (!Number.isInteger(hops) || hops < 0) {
+    throw new Error('TRUST_PROXY must be the number of proxies in front of the server, e.g. 1');
+  }
+  app.set('trust proxy', hops);
+}
 
 // Logger
 if (app.get('env') !== 'test') {
@@ -59,6 +70,10 @@ app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
 
 // Serve Swagger UI at /api-docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Security headers (no MIME sniffing, no framing, a strict Content-Security-Policy, ...). Added
+// after the docs so the CSP cannot get in the way of the Swagger UI page.
+app.use(helmet());
 
 // Access Control: the refresh token cookie is credentialed, so allowed origins must be listed
 // explicitly (a credentialed request cannot use "*")
