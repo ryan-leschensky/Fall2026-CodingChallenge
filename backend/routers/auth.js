@@ -2,6 +2,7 @@ const express = require('express');
 const HttpError = require('../lib/http-error');
 const { verifyPassword, getDummyHash } = require('../lib/password');
 const Tokens = require('../lib/tokens');
+const { loginLimit } = require('../middleware/rate-limit');
 const requireAuth = require('../middleware/require-auth');
 const Users = require('../models/users');
 const RefreshTokens = require('../models/refresh-tokens');
@@ -94,8 +95,10 @@ const clearRefreshCookie = (req, res) => {
  *         description: Missing username or password
  *       401:
  *         description: Invalid username or password
+ *       429:
+ *         description: Too many login attempts from this address; see Retry-After
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimit, async (req, res) => {
   const { username, password } = req.body ?? {};
 
   if (typeof username !== 'string' || typeof password !== 'string') {

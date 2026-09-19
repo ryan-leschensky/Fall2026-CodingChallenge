@@ -1,6 +1,7 @@
 const express = require('express');
 const HttpError = require('../lib/http-error');
 const { hashPassword } = require('../lib/password');
+const { signUpLimit } = require('../middleware/rate-limit');
 const Users = require('../models/users');
 
 const router = express.Router();
@@ -129,8 +130,10 @@ router.get('/:username', async (req, res) => {
  *         description: Validation error
  *       409:
  *         description: Username already taken
+ *       429:
+ *         description: Too many accounts created from this address; see Retry-After
  */
-router.post('/', async (req, res) => {
+router.post('/', signUpLimit, async (req, res) => {
   const { username, password } = req.body ?? {};
 
   const problem = validateSignUp({ username, password });
