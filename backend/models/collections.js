@@ -76,16 +76,31 @@ const SELECT_COLLECTION = `
   ) stats`;
 
 /**
- * Lists the collections a user owns or is a member of, most recently changed first.
+ * Which of a user's collections a list includes: all of them, the ones they own, or the ones
+ * shared with them (they are a member but not the owner).
+ * @typedef {'all'|'owned'|'shared'} CollectionFilter
+ */
+const COLLECTION_FILTERS = ['all', 'owned', 'shared'];
+
+// WHERE clause for each filter. $1 is the user's id; m is their row in collection_members, if any.
+const FILTER_CONDITIONS = {
+  all: 'c.owner_id = $1 OR m.user_id IS NOT NULL',
+  owned: 'c.owner_id = $1',
+  shared: 'c.owner_id <> $1 AND m.user_id IS NOT NULL',
+};
+
+/**
+ * Lists a user's collections, most recently changed first.
  * @param db                        Database connection
  * @param {number} userId           User ID
- * @param {{ limit?: number, offset?: number }} [options] Pagination options
+ * @param {{ filter?: CollectionFilter, limit?: number, offset?: number }} [options]
+ *                                  Which collections to include (default all), and pagination
  * @returns {Promise<Collection[]>}
  */
 const listCollectionsForUser = async (db, userId, options = {}) => {
-  const { limit, offset } = options;
+  const { filter = 'all', limit, offset } = options;
   let sql = `${SELECT_COLLECTION}
-     WHERE c.owner_id = $1 OR m.user_id IS NOT NULL
+     WHERE ${FILTER_CONDITIONS[filter]}
      ORDER BY c.updated_at DESC, c.id DESC`;
   const params = [userId];
   if (typeof limit === 'number' && limit > 0) {
@@ -101,17 +116,17 @@ const listCollectionsForUser = async (db, userId, options = {}) => {
 };
 
 /**
- * Counts the collections a user owns or is a member of.
+ * Counts a user's collections.
  * @param db                        Database connection
  * @param {number} userId           User ID
+ * @param {{ filter?: CollectionFilter }} [options]  Which collections to count (default all)
  * @returns {Promise<number>}
  */
-const countCollectionsForUser = async (db, userId) => {
+const countCollectionsForUser = async (db, userId, { filter = 'all' } = {}) => {
   const { rows } = await db.query(
     `SELECT count(*)::integer AS total FROM collections c
-     WHERE c.owner_id = $1
-        OR EXISTS (SELECT 1 FROM collection_members m
-                   WHERE m.collection_id = c.id AND m.user_id = $1)`,
+     LEFT JOIN collection_members m ON m.collection_id = c.id AND m.user_id = $1
+     WHERE ${FILTER_CONDITIONS[filter]}`,
     [userId],
   );
   return rows[0].total;
@@ -224,6 +239,7 @@ const resetShareLink = async (db, id) => {
 module.exports = {
   NAME_MAX_LENGTH,
   DESCRIPTION_MAX_LENGTH,
+  COLLECTION_FILTERS,
   Collection,
   listCollectionsForUser,
   countCollectionsForUser,

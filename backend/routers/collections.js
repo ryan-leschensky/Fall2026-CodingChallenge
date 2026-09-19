@@ -141,6 +141,15 @@ router.use(requireAuth);
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: filter
+ *         schema:
+ *           type: string
+ *           enum: [all, owned, shared]
+ *           default: all
+ *         description: >
+ *           Which collections to list: all of them, only the ones the user owns, or only the ones
+ *           shared with them by other users. X-Total-Count counts the same set.
+ *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
@@ -174,14 +183,21 @@ router.use(requireAuth);
  *               items:
  *                 $ref: '#/components/schemas/Collection'
  *       400:
- *         description: Invalid pagination parameter
+ *         description: Invalid filter or pagination parameter
  *       401:
  *         description: Missing, invalid, or expired access token
  */
 router.get('/', async (req, res) => {
+  const { filter = 'all' } = req.query;
+  if (!Collections.COLLECTION_FILTERS.includes(filter)) {
+    throw new HttpError(400, `filter must be one of: ${Collections.COLLECTION_FILTERS.join(', ')}`);
+  }
   const pagination = readPagination(req.query);
-  const collections = await Collections.listCollectionsForUser(req.pool, req.user.id, pagination);
-  const total = await Collections.countCollectionsForUser(req.pool, req.user.id);
+  const collections = await Collections.listCollectionsForUser(req.pool, req.user.id, {
+    filter,
+    ...pagination,
+  });
+  const total = await Collections.countCollectionsForUser(req.pool, req.user.id, { filter });
   res.set('X-Total-Count', String(total));
   res.json(collections);
 });
