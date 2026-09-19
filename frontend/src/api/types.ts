@@ -36,6 +36,9 @@ export interface Collection {
   updatedAt: string
 }
 
+/** Which of the user's collections a list includes: all, the ones they own, or ones shared with them */
+export type CollectionFilter = 'all' | 'owned' | 'shared'
+
 export interface CollectionImage {
   id: number
   collectionId: number

@@ -1,6 +1,7 @@
 import { request, totalCount } from './client'
 import type {
   Collection,
+  CollectionFilter,
   CollectionImage,
   CollectionWithImages,
   EditableImageFields,
@@ -18,7 +19,11 @@ export interface PageQuery {
 
 // --- Collections ---------------------------------------------------------------------------------
 
-export const listCollections = async (query: PageQuery = {}): Promise<Page<Collection>> => {
+export interface CollectionListQuery extends PageQuery {
+  filter?: CollectionFilter
+}
+
+export const listCollections = async (query: CollectionListQuery = {}): Promise<Page<Collection>> => {
   const { data, headers } = await request<Collection[]>('/collections', { query: { ...query } })
   return { items: data, total: totalCount(headers) }
 }

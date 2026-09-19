@@ -150,6 +150,65 @@ describeDb('Collections', () => {
     });
   });
 
+  describe('Filtering the list', () => {
+    let own;
+    let shared;
+    const ids = response => response.body.map(c => c.id);
+
+    beforeAll(async () => {
+      const response = await api('editor', 'post', '/api/collections').send({ name: 'Mine' });
+      own = response.body;
+      shared = await createCollection('Shared with editor');
+      expect((await share(shared.id, users.editor.username, 'view')).statusCode).toBe(201);
+    });
+
+    test('Should list owned and shared collections by default', async () => {
+      const response = await api('editor', 'get', '/api/collections?limit=100');
+
+      expect(ids(response)).toEqual(expect.arrayContaining([own.id, shared.id]));
+    });
+
+    test('Should list only the collections the user owns', async () => {
+      const response = await api('editor', 'get', '/api/collections?filter=owned&limit=100');
+
+      expect(ids(response)).toContain(own.id);
+      expect(ids(response)).not.toContain(shared.id);
+      expect(response.body.every(c => c.permission === 'own')).toBe(true);
+      expect(response.headers['x-total-count']).toBe(String(response.body.length));
+    });
+
+    test('Should list only the collections shared with the user', async () => {
+      const response = await api('editor', 'get', '/api/collections?filter=shared&limit=100');
+
+      expect(ids(response)).toContain(shared.id);
+      expect(ids(response)).not.toContain(own.id);
+      expect(response.body.every(c => c.owner.id !== users.editor.id)).toBe(true);
+      expect(response.headers['x-total-count']).toBe(String(response.body.length));
+    });
+
+    test('Should split the total between the two filters', async () => {
+      const all = await api('editor', 'get', '/api/collections');
+      const owned = await api('editor', 'get', '/api/collections?filter=owned');
+      const sharedOnly = await api('editor', 'get', '/api/collections?filter=shared');
+
+      expect(
+        Number(owned.headers['x-total-count']) + Number(sharedOnly.headers['x-total-count']),
+      ).toBe(Number(all.headers['x-total-count']));
+    });
+
+    test.each(['mine', 'OWNED', ''])('Should reject filter=%s', async filter => {
+      const response = await api('editor', 'get', `/api/collections?filter=${filter}`);
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    test('Should reject a repeated filter', async () => {
+      const response = await api('editor', 'get', '/api/collections?filter=owned&filter=shared');
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
   describe('Permissions', () => {
     let collection;
 

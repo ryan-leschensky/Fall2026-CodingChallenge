@@ -28,7 +28,7 @@ export function Layout() {
           {user && (
             <div className="nav-links">
               <NavLink to="/" end className={navLinkClass}>
-                My collections
+                Collections
               </NavLink>
             </div>
           )}

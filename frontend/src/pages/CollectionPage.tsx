@@ -30,7 +30,7 @@ function BackLink() {
   return (
     <Link to="/" className="back-link">
       <Icon name="arrowLeft" size={16} />
-      My collections
+      Collections
     </Link>
   )
 }
