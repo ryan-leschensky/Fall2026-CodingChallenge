@@ -14,8 +14,9 @@ PROJECT LAYOUT
                 index.js        builds the app, listens when run directly
                 db/db.js        PostgreSQL connection pool
                 routers/        API routes, mounted under /api
-                models/         SQL queries for each resource (users.js)
-                lib/            shared helpers (password hashing, HttpError)
+                models/         SQL queries for each resource (users, collections, ...)
+                middleware/     requireAuth, collection permission checks
+                lib/            shared helpers (passwords, tokens, share ids, HttpError)
                 seed/           one .sql file per table (database schema) and its runner
                 test/           Jest + Supertest API tests
   frontend/   React + TypeScript app built with Vite - runs on http://localhost:5173
@@ -39,23 +40,27 @@ From the repository root, install dependencies for each server:
   npm install
 
 The backend reads its configuration from backend/.env, which is not committed.
-Copy the template and fill in your values (DATABASE_URL and JWT_SECRET are
-required; the server will not start without them):
+Copy the template and fill in your values (DATABASE_URL, JWT_SECRET and
+SHARE_LINK_SECRET are required; the server will not start without them):
 
   cd backend
   cp .env.example .env
 
-Generate JWT_SECRET (any random value of at least 32 bytes) with:
+Generate JWT_SECRET and SHARE_LINK_SECRET (two different random values of at
+least 32 bytes) by running this twice:
 
   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+
+Changing SHARE_LINK_SECRET later makes every existing share link stop working.
 
 Then create the database tables:
 
   cd backend
   npm run seed
 
-This runs backend/seed/users.sql and then backend/seed/refresh-tokens.sql
-(the order listed in seeder.js) in one transaction and is safe to rerun:
+This runs the files in backend/seed (users.sql, refresh-tokens.sql,
+collections.sql, collection-images.sql - the order listed in seeder.js) in one
+transaction and is safe to rerun:
 tables and indexes are only created if missing. (It also replaces the starter
 template's sample users(name, lastname) table if an old database still has it.)
 
@@ -129,6 +134,40 @@ Passwords are 8-128 characters and are stored only as a salted scrypt hash.
   GET    /api/auth/me            The logged-in user (needs an access token)
            200 user, 401 missing, invalid or expired access token
 
+Every /api/collections endpoint needs an access token. The permission each one
+needs is in brackets (see COLLECTIONS AND SHARING below). A collection the user
+cannot see returns 404, the same as one that does not exist; one they can see
+but not change returns 403. Full request/response schemas: /api-docs.
+
+  GET    /api/collections                    Collections I own or am a member of
+  POST   /api/collections                    Create  { "name", "description"? }
+  GET    /api/collections/:id                One collection + its images   [view]
+  PATCH  /api/collections/:id                Rename  { "name"?, "description"? }  [edit]
+  DELETE /api/collections/:id                Delete it for everyone        [own]
+
+  GET    /api/collections/:id/images         List images, newest first     [view]
+  POST   /api/collections/:id/images         Save an image                 [edit]
+           { "imageUrl", "thumbnailUrl"?, "pageUrl"?, "source"?, "sourceId"?,
+             "width"?, "height"?, "title"?, "note"?, "tags"? }
+           409 if that imageUrl is already in the collection
+  GET    /api/collections/:id/images/:imageId                              [view]
+  PATCH  /api/collections/:id/images/:imageId  Edit { "title"?, "note"?, "tags"? }  [edit]
+  DELETE /api/collections/:id/images/:imageId  Remove it                   [edit]
+
+  GET    /api/collections/:id/members        Owner and members             [view]
+  PUT    /api/collections/:id/members/:username   { "permission": "view"|"edit"|"own" }  [own]
+           Add a member (201) or change their permission (200). "own" hands
+           ownership to an existing member; the old owner stays as an editor.
+  DELETE /api/collections/:id/members/:username   Remove a member [own], or leave
+           (any member may remove themselves; the owner cannot leave)
+
+  PUT    /api/collections/:id/share-link     Turn the link on  { "access": "view"|"edit" }  [own]
+  DELETE /api/collections/:id/share-link     Turn the link off             [own]
+  POST   /api/collections/:id/share-link/reset   New link; old ones stop working  [own]
+
+  GET    /api/shared/:shareId                View through the link (no login needed)
+  POST   /api/shared/:shareId/join           Join as a member with the link's access
+
 
 SESSIONS
 --------
@@ -155,6 +194,36 @@ Logging in or refreshing returns a session:
 
   - Only origins listed in CORS_ORIGIN (default http://localhost:5173) may
     make credentialed requests to the API.
+
+
+COLLECTIONS AND SHARING
+-----------------------
+Each collection has exactly one owner, who created it (or was handed it).
+Access is one of three levels, each including the ones before it:
+
+  view   see the collection and its images
+  edit   also rename it and add, edit and remove images
+  own    also share it, manage members, reset the link, and delete it
+
+The levels are a PostgreSQL enum (collection_permission) and a matching
+Permission object in backend/lib/permissions.js. Members are stored in
+collection_members; the owner is collections.owner_id, so there can never be
+two owners.
+
+A collection can be shared two ways:
+  - With a user by username, at view or edit.
+  - With a link. The owner turns it on at view or edit. Anyone with the link can
+    view the collection without logging in, and a logged-in user can join it to
+    become a member at that level (joining never lowers access they already
+    have). Turning the link off or resetting it stops old links working; people
+    who already joined stay members.
+
+The link id (shareId, e.g. /api/shared/Zq3...) comes from a getter on the
+Collection model that derives it from the collection's id and a share version
+(backend/lib/share-ids.js): the two numbers are encrypted as one AES block
+with a key from SHARE_LINK_SECRET. Nothing extra is stored, each collection
+gets a unique 22-character id, and ids cannot be guessed or reveal the
+collection's number. Resetting the link bumps the version, which gives a new id.
 
 
 REFLECTION (under 100 words)

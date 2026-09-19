@@ -5,7 +5,7 @@ const path = require('node:path');
 const { pool, connect } = require('../db/db');
 
 // Run in this order: a table's file must come after the tables its foreign keys reference
-const SQL_FILES = ['users.sql', 'refresh-tokens.sql'];
+const SQL_FILES = ['users.sql', 'refresh-tokens.sql', 'collections.sql', 'collection-images.sql'];
 
 /**
  * Creates the database schema by running each file in `SQL_FILES` in order within one transaction.

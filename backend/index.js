@@ -9,7 +9,8 @@ const cookieParser = require('cookie-parser');
 // Import PostgreSQL Middleware
 const { pool, connect, PostgreSQL } = require('./db/db');
 const routes = require('./routers/routes');
-const { assertConfigured } = require('./lib/tokens');
+const Tokens = require('./lib/tokens');
+const ShareIds = require('./lib/share-ids');
 
 const app = express();
 
@@ -98,7 +99,8 @@ if (require.main === module) {
   const port = process.env.PORT || 3000;
 
   Promise.resolve()
-    .then(assertConfigured)
+    .then(Tokens.assertConfigured)
+    .then(ShareIds.assertConfigured)
     .then(connect)
     .then(() => {
       const server = app.listen(port, () => {
