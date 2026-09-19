@@ -15,8 +15,10 @@ PROJECT LAYOUT
                 db/db.js        PostgreSQL connection pool
                 routers/        API routes, mounted under /api
                 models/         SQL queries for each resource (users, collections, ...)
-                middleware/     requireAuth, collection permission checks
-                lib/            shared helpers (passwords, tokens, share ids, HttpError)
+                middleware/     requireAuth, collection permission checks, rate limits
+                lib/            shared helpers (passwords, tokens, share ids, pagination,
+                                Pixabay search, image downloads, HttpError)
+                storage/        where saved images are kept (local disk or S3)
                 seed/           one .sql file per table (database schema) and its runner
                 test/           Jest + Supertest API tests
   frontend/   React + TypeScript app built with Vite - runs on http://localhost:5173
@@ -40,8 +42,9 @@ From the repository root, install dependencies for each server:
   npm install
 
 The backend reads its configuration from backend/.env, which is not committed.
-Copy the template and fill in your values (DATABASE_URL, JWT_SECRET and
-SHARE_LINK_SECRET are required; the server will not start without them):
+Copy the template and fill in your values (DATABASE_URL, JWT_SECRET,
+SHARE_LINK_SECRET and PIXABAY_API_KEY are required; the server will not start
+without them):
 
   cd backend
   cp .env.example .env
@@ -52,6 +55,14 @@ least 32 bytes) by running this twice:
   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 Changing SHARE_LINK_SECRET later makes every existing share link stop working.
+
+PIXABAY_API_KEY is your Pixabay API key: sign up at pixabay.com, then copy the
+key shown on https://pixabay.com/api/docs/. It is only used by the backend.
+
+Saved images from Pixabay are downloaded and stored in backend/media by default
+(see SEARCH AND SAVED IMAGES below). The other settings in .env.example have
+working defaults; set STORAGE_DRIVER=s3 and the S3_* values to store them in a
+bucket instead.
 
 Then create the database tables:
 
@@ -139,6 +150,10 @@ needs is in brackets (see COLLECTIONS AND SHARING below). A collection the user
 cannot see returns 404, the same as one that does not exist; one they can see
 but not change returns 403. Full request/response schemas: /api-docs.
 
+Lists come one page at a time, 20 items by default. Pass ?limit= (up to 100)
+with ?page= (from 1) or ?offset=; the total across all pages is in the
+X-Total-Count response header.
+
   GET    /api/collections                    Collections I own or am a member of
   POST   /api/collections                    Create  { "name", "description"? }
   GET    /api/collections/:id                One collection + its images   [view]
@@ -149,7 +164,8 @@ but not change returns 403. Full request/response schemas: /api-docs.
   POST   /api/collections/:id/images         Save an image                 [edit]
            { "imageUrl", "thumbnailUrl"?, "pageUrl"?, "source"?, "sourceId"?,
              "width"?, "height"?, "title"?, "note"?, "tags"? }
-           409 if that imageUrl is already in the collection
+           409 if that image is already in the collection. Images from
+           Pixabay are downloaded and stored (see SEARCH AND SAVED IMAGES)
   GET    /api/collections/:id/images/:imageId                              [view]
   PATCH  /api/collections/:id/images/:imageId  Edit { "title"?, "note"?, "tags"? }  [edit]
   DELETE /api/collections/:id/images/:imageId  Remove it                   [edit]
@@ -167,6 +183,16 @@ but not change returns 403. Full request/response schemas: /api-docs.
 
   GET    /api/shared/:shareId                View through the link (no login needed)
   POST   /api/shared/:shareId/join           Join as a member with the link's access
+
+  GET    /api/search/images?q=lake&page=1&limit=20   Search Pixabay (needs an access token)
+           Each result can be sent as-is to POST /api/collections/:id/images,
+           and savedIn lists the user's collections that already have it.
+
+Some endpoints are rate limited and answer 429 (with a Retry-After header) when
+called too often: login (10 per 15 minutes per address), sign-up (10 per hour
+per address), share links (120 per minute per address) and search (30 per
+minute per user). Behind a reverse proxy, set TRUST_PROXY so limits count the
+real client address.
 
 
 SESSIONS
@@ -224,6 +250,27 @@ Collection model that derives it from the collection's id and a share version
 with a key from SHARE_LINK_SECRET. Nothing extra is stored, each collection
 gets a unique 22-character id, and ids cannot be guessed or reveal the
 collection's number. Resetting the link bumps the version, which gives a new id.
+
+
+SEARCH AND SAVED IMAGES
+-----------------------
+Search goes through the backend, so the Pixabay key never reaches the browser.
+Identical searches are cached for 24 hours, as Pixabay's API terms ask, and
+only the first 500 results of a search can be paged through.
+
+Pixabay does not allow its image URLs to be hotlinked long-term, and the
+full-size URLs it hands out expire after a day. So when an image from an
+allowed host (MEDIA_ALLOWED_HOSTS, pixabay.com by default) is saved, the
+backend downloads it and stores a copy; imageUrl then points at the copy and
+originalUrl keeps where it came from. Images from other hosts are saved as
+links.
+
+Downloads are guarded so the server cannot be used to fetch other addresses:
+only https URLs on allowed hosts, checked again on every redirect, up to
+MEDIA_MAX_BYTES, and only real JPEG, PNG, WebP or GIF files (read from the
+bytes, not the headers). Each file is named after a hash of its contents, so an
+image saved to many collections is stored once. With STORAGE_DRIVER=local the
+files are served from http://localhost:3000/media.
 
 
 REFLECTION (under 100 words)
