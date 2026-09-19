@@ -288,6 +288,7 @@ describeDb('Collections', () => {
         sourceId: '1001',
         imageUrl: 'https://cdn.pixabay.example/photo-1.jpg',
         thumbnailUrl: 'https://cdn.pixabay.example/photo-1_150.jpg',
+        originalUrl: null,
         pageUrl: 'https://pixabay.example/photos/1/',
         width: 1920,
         height: 1080,

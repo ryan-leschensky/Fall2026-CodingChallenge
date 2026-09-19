@@ -16,7 +16,7 @@ const UNIQUE_VIOLATION = '23505';
 
 const IMAGE_COLUMNS = `id, collection_id AS "collectionId", added_by AS "addedBy",
   source, source_id AS "sourceId", image_url AS "imageUrl", thumbnail_url AS "thumbnailUrl",
-  page_url AS "pageUrl", width, height, title, note, tags,
+  original_url AS "originalUrl", page_url AS "pageUrl", width, height, title, note, tags,
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 // Runs alongside a change to an image; $1 must be the collection id
@@ -100,8 +100,9 @@ const addImage = async (db, collectionId, userId, image) => {
     const { rows } = await db.query(
       `WITH added AS (
          INSERT INTO collection_images (collection_id, added_by, source, source_id, image_url,
-                                        thumbnail_url, page_url, width, height, title, note, tags)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                                        thumbnail_url, page_url, width, height, title, note, tags,
+                                        original_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *
        ), touched AS (${TOUCH_COLLECTION})
        SELECT ${IMAGE_COLUMNS} FROM added`,
@@ -118,6 +119,7 @@ const addImage = async (db, collectionId, userId, image) => {
         image.title ?? '',
         image.note ?? '',
         image.tags ?? [],
+        image.originalUrl ?? null,
       ],
     );
     return rows[0];

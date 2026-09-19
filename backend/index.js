@@ -12,6 +12,8 @@ const { pool, connect, PostgreSQL } = require('./db/db');
 const routes = require('./routers/routes');
 const Tokens = require('./lib/tokens');
 const ShareIds = require('./lib/share-ids');
+const Storage = require('./storage');
+const { readMediaConfig } = require('./lib/media-config');
 
 const app = express();
 
@@ -75,6 +77,22 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // after the docs so the CSP cannot get in the way of the Swagger UI page.
 app.use(helmet());
 
+// Saved images, when they are stored on this server's disk (STORAGE_DRIVER=local). A file is named
+// after a hash of its bytes, so it never changes and browsers can cache it for good. Pages on other
+// origins (the frontend) must be allowed to show them, which helmet's default forbids.
+if (readMediaConfig().driver === 'local') {
+  app.use(
+    '/media',
+    helmet.crossOriginResourcePolicy({ policy: 'cross-origin' }),
+    express.static(readMediaConfig().dir, {
+      immutable: true,
+      maxAge: '1y',
+      index: false,
+      fallthrough: false,
+    }),
+  );
+}
+
 // Access Control: the refresh token cookie is credentialed, so allowed origins must be listed
 // explicitly (a credentialed request cannot use "*")
 const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
@@ -107,13 +125,15 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
 });
 
-// Error handler: client errors keep their message, server errors are logged and hidden
+// Error handler: client errors keep their message, server errors are logged and hidden unless
+// marked safe to show (expose), like a failure of an upstream service
 app.use((err, req, res, next) => {
   const status = err.status ?? err.statusCode ?? 500;
+  const expose = err.expose ?? status < 500;
   if (status >= 500) {
-    console.error(err);
+    console.error(expose ? `${status} ${err.message}` : err);
   }
-  res.status(status).json({ message: status < 500 ? err.message : 'Internal Server Error' });
+  res.status(status).json({ message: expose ? err.message : 'Internal Server Error' });
 });
 
 // Only listen when run directly (npm start); tests import the app without opening a port
@@ -123,6 +143,7 @@ if (require.main === module) {
   Promise.resolve()
     .then(Tokens.assertConfigured)
     .then(ShareIds.assertConfigured)
+    .then(Storage.assertConfigured)
     .then(connect)
     .then(() => {
       const server = app.listen(port, () => {

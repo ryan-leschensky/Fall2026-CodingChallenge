@@ -19,3 +19,5 @@ CREATE TABLE IF NOT EXISTS collection_images (
 
 CREATE UNIQUE INDEX IF NOT EXISTS collection_images_collection_image_url_key
   ON collection_images (collection_id, image_url);
+
+ALTER TABLE collection_images ADD COLUMN IF NOT EXISTS original_url VARCHAR(2048);

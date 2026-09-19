@@ -1,6 +1,7 @@
 const express = require('express');
 const HttpError = require('../lib/http-error');
 const { parseId } = require('../lib/ids');
+const { isAllowedSource, ingestImage } = require('../lib/image-ingest');
 const { readPagination } = require('../lib/pagination');
 const { Permission } = require('../lib/permissions');
 const requireCollectionPermission = require('../middleware/collection-access');
@@ -50,6 +51,13 @@ const MAX_DIMENSION = 100_000;
  *           type: string
  *           format: uri
  *           nullable: true
+ *         originalUrl:
+ *           type: string
+ *           format: uri
+ *           nullable: true
+ *           description: >
+ *             Where the image was downloaded from, when this server stores a copy (imageUrl then
+ *             points at the copy); null for images saved as links
  *         pageUrl:
  *           type: string
  *           format: uri
@@ -212,6 +220,38 @@ const readNewImage = body => {
 };
 
 /**
+ * Stores a copy of an image from an allowed host (see lib/image-ingest.js) and points the saved
+ * image at the copy, keeping the original URL. Its real size replaces whatever the client sent.
+ * Images on other hosts are saved as links, as they are.
+ * @param {object} image    From readNewImage
+ * @returns {Promise<object>}   The image to save
+ */
+const storeCopies = async image => {
+  if (!isAllowedSource(image.imageUrl)) {
+    return image;
+  }
+  const stored = await ingestImage(image.imageUrl);
+
+  let thumbnailUrl = image.thumbnailUrl;
+  if (thumbnailUrl && isAllowedSource(thumbnailUrl)) {
+    // Only a convenience: without one, clients show imageUrl instead
+    thumbnailUrl = await ingestImage(thumbnailUrl).then(
+      thumbnail => thumbnail.url,
+      () => null,
+    );
+  }
+
+  return {
+    ...image,
+    originalUrl: image.imageUrl,
+    imageUrl: stored.url,
+    thumbnailUrl,
+    width: stored.width,
+    height: stored.height,
+  };
+};
+
+/**
  * @returns {number} The image id in req.params.imageId
  * @throws {HttpError} 404 if it is not a valid id
  */
@@ -281,7 +321,11 @@ router.get('/', requireCollectionPermission(Permission.VIEW), async (req, res) =
  * /api/collections/{collectionId}/images:
  *   post:
  *     summary: Save an image to a collection
- *     description: Needs edit permission.
+ *     description: >
+ *       Needs edit permission. An image on an https URL from an allowed host (MEDIA_ALLOWED_HOSTS,
+ *       pixabay.com by default) is downloaded and stored by this server: imageUrl in the response
+ *       points at the stored copy, originalUrl keeps the URL that was sent, and width and height
+ *       are read from the image. Images on other hosts are saved as links.
  *     tags:
  *       - Images
  *     security:
@@ -335,9 +379,15 @@ router.get('/', requireCollectionPermission(Permission.VIEW), async (req, res) =
  *         description: No such collection, or the user has no access to it
  *       409:
  *         description: The image is already in this collection
+ *       413:
+ *         description: The image is larger than MEDIA_MAX_BYTES
+ *       415:
+ *         description: The URL is not a JPEG, PNG, WebP or GIF image
+ *       502:
+ *         description: The image could not be downloaded from its host
  */
 router.post('/', requireCollectionPermission(Permission.EDIT), async (req, res) => {
-  const image = readNewImage(req.body);
+  const image = await storeCopies(readNewImage(req.body));
   try {
     const saved = await CollectionImages.addImage(req.pool, req.collection.id, req.user.id, image);
     res.status(201).location(`${req.baseUrl}/${saved.id}`).json(saved);
