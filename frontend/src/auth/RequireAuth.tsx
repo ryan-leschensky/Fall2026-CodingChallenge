@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
+import { Loading } from '../components/Feedback'
 import { useAuth } from './auth-context'
 
 /**
@@ -10,7 +11,7 @@ export function RequireAuth() {
   const location = useLocation()
 
   if (!ready) {
-    return <p>Loading…</p>
+    return <Loading />
   }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />

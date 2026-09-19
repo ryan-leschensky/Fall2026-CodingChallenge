@@ -3,6 +3,8 @@ import { Link } from 'react-router'
 import { disableShareLink, resetShareLink, setShareLink } from '../api/collections'
 import type { Collection, LinkAccess } from '../api/types'
 import { errorMessage } from '../lib/errors'
+import { ErrorMessage } from './Feedback'
+import { Icon } from './Icon'
 
 interface SharePanelProps {
   collection: Collection
@@ -46,33 +48,62 @@ export function SharePanel({ collection, onChanged }: SharePanelProps) {
   }
 
   return (
-    <section className="stack panel">
-      <h2>Share link</h2>
-      <label>
+    <section className="panel">
+      <div className="panel-header">
+        <span className="panel-icon">
+          <Icon name="link" />
+        </span>
+        <div>
+          <h2>Share link</h2>
+          <p>Let anyone with the link view or join.</p>
+        </div>
+      </div>
+
+      <div className="status-line">
+        <span className={enabled ? 'status-dot on' : 'status-dot'} />
+        {enabled ? 'Link sharing is on' : 'Link sharing is off'}
+      </div>
+
+      <label className="field">
         Anyone with the link can
         <select
           value={collection.linkAccess ?? 'off'}
           onChange={event => handleAccessChange(event.target.value)}
           disabled={busy}
         >
-          <option value="off">— link sharing off —</option>
-          <option value="view">view (and join as a viewer)</option>
-          <option value="edit">view (and join as an editor)</option>
+          <option value="off">Nothing (sharing off)</option>
+          <option value="view">View, and join as a viewer</option>
+          <option value="edit">View, and join as an editor</option>
         </select>
       </label>
 
       {enabled && shareUrl && sharePath && (
-        <div className="row">
-          <Link to={sharePath}>{shareUrl}</Link>
-          <button type="button" onClick={copyLink}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-          <button type="button" onClick={() => run(() => resetShareLink(collection.id))} disabled={busy}>
-            New link
+        <div className="stack">
+          <div className="share-url">
+            <Link to={sharePath} title={shareUrl}>
+              {shareUrl}
+            </Link>
+            <button
+              type="button"
+              className={copied ? 'btn btn-sm btn-saved' : 'btn btn-sm btn-primary'}
+              onClick={copyLink}
+            >
+              <Icon name={copied ? 'check' : 'copy'} size={14} strokeWidth={2.25} />
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => run(() => resetShareLink(collection.id))}
+            disabled={busy}
+          >
+            <Icon name="refresh" size={14} />
+            Replace with a new link
           </button>
         </div>
       )}
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
     </section>
   )
 }

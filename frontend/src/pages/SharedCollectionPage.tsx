@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { getSharedCollection, joinSharedCollection } from '../api/collections'
 import type { CollectionWithImages } from '../api/types'
 import { useAuth } from '../auth/auth-context'
+import { EmptyState, ErrorMessage, Loading, Spinner } from '../components/Feedback'
+import { Icon } from '../components/Icon'
 import { ImageGrid } from '../components/ImageGrid'
 import { errorMessage } from '../lib/errors'
 
@@ -33,11 +35,15 @@ export function SharedCollectionPage() {
     }
   }, [shareId, ready, user?.id])
 
-  if (error) {
-    return <p className="error">{error}</p>
+  if (error && !collection) {
+    return (
+      <EmptyState icon="link" title="This link isn’t working">
+        {error}
+      </EmptyState>
+    )
   }
   if (!collection) {
-    return <p>Loading…</p>
+    return <Loading />
   }
 
   const handleJoin = async () => {
@@ -52,33 +58,53 @@ export function SharedCollectionPage() {
   }
 
   return (
-    <section className="stack">
-      <header className="stack">
-        <h1>{collection.name}</h1>
-        {collection.description && <p>{collection.description}</p>}
-        <small>
-          Shared by {collection.owner.username} · {collection.imageCount}{' '}
-          {collection.imageCount === 1 ? 'image' : 'images'}
-        </small>
+    <div className="stack-lg">
+      <header className="page-header">
+        <div className="titles">
+          <span className="eyebrow">Shared collection</span>
+          <h1>{collection.name}</h1>
+          {collection.description && <p className="description">{collection.description}</p>}
+          <div className="meta">
+            <span className="avatar sm">{collection.owner.username.charAt(0)}</span>
+            <span>Shared by {collection.owner.username}</span>
+            <span className="dot-separator" />
+            <span>
+              {collection.imageCount} {collection.imageCount === 1 ? 'image' : 'images'}
+            </span>
+          </div>
+        </div>
+
+        <div className="header-actions">
+          {!user && (
+            <Link to="/login" state={{ from: location }} className="btn btn-primary">
+              <Icon name="logIn" size={16} />
+              Log in to join
+            </Link>
+          )}
+          {user && collection.permission && (
+            <Link to={`/collections/${collection.id}`} className="btn btn-secondary">
+              Open in my collections
+              <Icon name="chevronRight" size={16} />
+            </Link>
+          )}
+          {user && !collection.permission && (
+            <button type="button" className="btn btn-primary" onClick={handleJoin} disabled={joining}>
+              {joining ? <Spinner /> : <Icon name="plus" size={16} strokeWidth={2.5} />}
+              Join as {collection.linkAccess === 'edit' ? 'an editor' : 'a viewer'}
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="row">
-        {!user && (
-          <Link to="/login" state={{ from: location }}>
-            Log in to join this collection
-          </Link>
-        )}
-        {user && collection.permission && (
-          <Link to={`/collections/${collection.id}`}>Open in my collections</Link>
-        )}
-        {user && !collection.permission && (
-          <button type="button" onClick={handleJoin} disabled={joining}>
-            Join as {collection.linkAccess === 'edit' ? 'an editor' : 'a viewer'}
-          </button>
-        )}
-      </div>
+      {error && <ErrorMessage>{error}</ErrorMessage>}
 
-      <ImageGrid collectionId={collection.id} images={collection.images} canEdit={false} />
-    </section>
+      {collection.images.length === 0 ? (
+        <EmptyState icon="image" title="No images yet">
+          This collection is empty for now.
+        </EmptyState>
+      ) : (
+        <ImageGrid collectionId={collection.id} images={collection.images} canEdit={false} />
+      )}
+    </div>
   )
 }

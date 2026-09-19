@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import { getCollection, listImages } from '../api/collections'
-import type { Collection, CollectionImage } from '../api/types'
+import type { Collection, CollectionImage, Permission } from '../api/types'
 import { useAuth } from '../auth/auth-context'
-import { CollectionDetailsForm } from '../components/CollectionDetailsForm'
 import { CollectionActions } from '../components/CollectionActions'
+import { CollectionDetailsForm } from '../components/CollectionDetailsForm'
+import { EmptyState, ErrorMessage, Loading, Spinner } from '../components/Feedback'
+import { Icon } from '../components/Icon'
 import { ImageGrid } from '../components/ImageGrid'
 import { ImageSearch } from '../components/ImageSearch'
 import { MembersPanel } from '../components/MembersPanel'
@@ -15,11 +17,22 @@ import { hasPermission } from '../lib/permissions'
 
 const PAGE_SIZE = 20
 
+const ACCESS_LABELS: Record<Permission, string> = { view: 'Viewer', edit: 'Editor', own: 'Owner' }
+
 /** One collection at /collections/:collectionId: its images, and (with access) tools to change it */
 export function CollectionPage() {
   const { collectionId = '' } = useParams()
   // A new key per collection starts the view fresh when the URL moves to another collection
   return <CollectionView key={collectionId} collectionId={collectionId} />
+}
+
+function BackLink() {
+  return (
+    <Link to="/" className="back-link">
+      <Icon name="arrowLeft" size={16} />
+      My collections
+    </Link>
+  )
 }
 
 function CollectionView({ collectionId }: { collectionId: string }) {
@@ -59,19 +72,18 @@ function CollectionView({ collectionId }: { collectionId: string }) {
     }
   }, [id, validId])
 
-  if (!validId) {
-    return <p className="error">That is not a valid collection address.</p>
-  }
-  if (error && !collection) {
+  if (!validId || (error && !collection)) {
     return (
-      <section className="stack">
-        <p className="error">{error}</p>
-        <Link to="/">Back to my collections</Link>
-      </section>
+      <div className="stack-lg">
+        <BackLink />
+        <EmptyState icon="alert" title="Collection unavailable">
+          {validId ? error : 'That is not a valid collection address.'}
+        </EmptyState>
+      </div>
     )
   }
   if (!collection || !user) {
-    return <p>Loading…</p>
+    return <Loading />
   }
 
   const canEdit = hasPermission(collection.permission, 'edit')
@@ -105,43 +117,71 @@ function CollectionView({ collectionId }: { collectionId: string }) {
   }
 
   return (
-    <section className="stack">
-      <p>
-        <Link to="/">← My collections</Link>
-      </p>
+    <div className="stack-lg">
+      <BackLink />
 
-      <header className="stack">
-        <h1>{collection.name}</h1>
-        {collection.description && <p>{collection.description}</p>}
-        <small>
-          Owned by {collection.owner.username} · your access: {collection.permission ?? 'none'} ·{' '}
-          {collection.imageCount} {collection.imageCount === 1 ? 'image' : 'images'}
-        </small>
+      <header className="page-header">
+        <div className="titles">
+          <h1>{collection.name}</h1>
+          {collection.description && <p className="description">{collection.description}</p>}
+          <div className="meta">
+            {collection.permission && (
+              <span className={isOwner ? 'badge badge-accent' : 'badge'}>{ACCESS_LABELS[collection.permission]}</span>
+            )}
+            {!isOwner && <span>Owned by {collection.owner.username}</span>}
+            {!isOwner && <span className="dot-separator" />}
+            <span>
+              {collection.imageCount} {collection.imageCount === 1 ? 'image' : 'images'}
+            </span>
+          </div>
+        </div>
+        <div className="header-actions">
+          {canEdit && <CollectionDetailsForm collection={collection} onSaved={setCollection} />}
+          <CollectionActions collection={collection} user={user} onDone={() => navigate('/')} />
+        </div>
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
 
-      {canEdit && <CollectionDetailsForm collection={collection} onSaved={setCollection} />}
-      <CollectionActions collection={collection} user={user} onDone={() => navigate('/')} />
+      <div className="collection-layout">
+        <div className="stack-lg">
+          <section className="stack">
+            <h2 className="section-title">
+              Images <span className="count">{collection.imageCount}</span>
+            </h2>
+            {images.length === 0 ? (
+              <EmptyState icon="image" title="No images yet">
+                {canEdit
+                  ? 'Search Pixabay below to start filling this collection.'
+                  : 'Images added by the editors will show up here.'}
+              </EmptyState>
+            ) : (
+              <ImageGrid
+                collectionId={collection.id}
+                images={images}
+                canEdit={canEdit}
+                onChanged={handleImageChanged}
+                onRemoved={handleImageRemoved}
+              />
+            )}
+            {hasMore && (
+              <div className="center">
+                <button type="button" className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore && <Spinner />}
+                  {loadingMore ? 'Loading' : 'Load more'}
+                </button>
+              </div>
+            )}
+          </section>
 
-      <h2>Images</h2>
-      {images.length === 0 && <p>No images yet.{canEdit && ' Search below to add some.'}</p>}
-      <ImageGrid
-        collectionId={collection.id}
-        images={images}
-        canEdit={canEdit}
-        onChanged={handleImageChanged}
-        onRemoved={handleImageRemoved}
-      />
-      {hasMore && (
-        <button type="button" onClick={loadMore} disabled={loadingMore}>
-          {loadingMore ? 'Loading…' : 'Load more'}
-        </button>
-      )}
+          {canEdit && <ImageSearch collectionId={collection.id} onSaved={handleImageSaved} />}
+        </div>
 
-      {canEdit && <ImageSearch collectionId={collection.id} onSaved={handleImageSaved} />}
-      {isOwner && <SharePanel collection={collection} onChanged={setCollection} />}
-      <MembersPanel collection={collection} />
-    </section>
+        <aside className="collection-sidebar">
+          {isOwner && <SharePanel collection={collection} onChanged={setCollection} />}
+          <MembersPanel collection={collection} />
+        </aside>
+      </div>
+    </div>
   )
 }

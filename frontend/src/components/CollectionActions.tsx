@@ -3,6 +3,8 @@ import { deleteCollection, removeMember } from '../api/collections'
 import type { Collection, User } from '../api/types'
 import { errorMessage } from '../lib/errors'
 import { hasPermission } from '../lib/permissions'
+import { ErrorMessage } from './Feedback'
+import { Icon } from './Icon'
 
 interface CollectionActionsProps {
   collection: Collection
@@ -24,7 +26,7 @@ export function CollectionActions({ collection, user, onDone }: CollectionAction
     return null
   }
 
-  const label = isOwner ? 'Delete collection' : 'Leave collection'
+  const label = isOwner ? 'Delete' : 'Leave'
 
   const handleClick = async () => {
     if (!confirming) {
@@ -46,16 +48,21 @@ export function CollectionActions({ collection, user, onDone }: CollectionAction
   }
 
   return (
-    <div className="row">
-      <button type="button" className="danger" onClick={handleClick}>
-        {confirming ? `Click again to ${label.toLowerCase()}` : label}
-      </button>
+    <>
       {confirming && (
-        <button type="button" onClick={() => setConfirming(false)}>
+        <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)}>
           Cancel
         </button>
       )}
-      {error && <p className="error">{error}</p>}
-    </div>
+      <button
+        type="button"
+        className={confirming ? 'btn btn-danger confirming' : 'btn btn-danger'}
+        onClick={handleClick}
+      >
+        <Icon name={isOwner ? 'trash' : 'logOut'} size={16} />
+        {confirming ? `Confirm ${label.toLowerCase()}` : `${label} collection`}
+      </button>
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+    </>
   )
 }

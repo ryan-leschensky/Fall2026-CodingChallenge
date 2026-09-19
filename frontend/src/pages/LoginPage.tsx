@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router'
 import { useAuth } from '../auth/auth-context'
+import { ErrorMessage, Spinner } from '../components/Feedback'
+import { Icon } from '../components/Icon'
 import { errorMessage } from '../lib/errors'
 
 interface LoginPageProps {
@@ -40,41 +42,54 @@ export function LoginPage({ mode }: LoginPageProps) {
   }
 
   return (
-    <section className="auth-page">
-      <h1>{isSignUp ? 'Create an account' : 'Log in'}</h1>
-      <form onSubmit={handleSubmit} className="stack">
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={event => setUsername(event.target.value)}
-            autoComplete="username"
-            required
-            autoFocus
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={event => setPassword(event.target.value)}
-            autoComplete={isSignUp ? 'new-password' : 'current-password'}
-            required
-          />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {isSignUp ? 'Sign up' : 'Log in'}
-        </button>
-      </form>
-      <p>
-        {isSignUp ? 'Already have an account? ' : 'New here? '}
-        {/* Keep the redirect target when switching between the two forms */}
-        <Link to={isSignUp ? '/login' : '/signup'} state={location.state}>
-          {isSignUp ? 'Log in' : 'Create an account'}
-        </Link>
-      </p>
-    </section>
+    <div className="auth-shell">
+      <section className="auth-card">
+        <div className="intro">
+          <span className="brand-mark lg">
+            <Icon name="image" size={24} strokeWidth={2.25} />
+          </span>
+          <h1>{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
+          <p className="muted">
+            {isSignUp ? 'Start collecting and sharing photos in seconds.' : 'Log in to see your collections.'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="stack">
+          <label className="field">
+            Username
+            <input
+              value={username}
+              onChange={event => setUsername(event.target.value)}
+              autoComplete="username"
+              required
+              autoFocus
+            />
+          </label>
+          <label className="field">
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              required
+            />
+          </label>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={submitting}>
+            {submitting && <Spinner />}
+            {isSignUp ? 'Create account' : 'Log in'}
+          </button>
+        </form>
+
+        <p className="switch">
+          {isSignUp ? 'Already have an account? ' : 'New here? '}
+          {/* Keep the redirect target when switching between the two forms */}
+          <Link to={isSignUp ? '/login' : '/signup'} state={location.state}>
+            {isSignUp ? 'Log in' : 'Create an account'}
+          </Link>
+        </p>
+      </section>
+    </div>
   )
 }
